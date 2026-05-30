@@ -8,9 +8,9 @@ from dataclasses import dataclass
 
 @dataclass
 class PairResult:
-    ks_statistic: float   # 0 = identical distributions, 1 = maximally different
-    ks_pvalue: float      # small → reject H0 (same distribution)
-    dcor_stat: float      # distance correlation (0 = independent, 1 = dependent)
+    spearman_r: float      # 1 = perfect ranking agreement, -1 = perfect disagreement
+    spearman_pvalue: float # small → significant correlation
+    dcor_stat: float       # distance correlation (0 = independent, 1 = dependent)
     dcor_pvalue: float
 
 
@@ -20,8 +20,8 @@ def pairwise_tests(S: np.ndarray, model_ids: list[str]) -> dict[tuple[str, str],
     on the same K texts are drawn from the same population.
 
     Uses:
-      - 2-sample KS test   (H0: same continuous distribution)
       - Spearman correlation (ranking agreement of the perplexity vectors)
+      - Distance correlation  (nonlinear dependence)
 
     Parameters
     ----------
@@ -32,19 +32,18 @@ def pairwise_tests(S: np.ndarray, model_ids: list[str]) -> dict[tuple[str, str],
     -------
     dict keyed by (model_i, model_j) for all i < j
     """
-    # Convert log-probs to perplexity: ppl = exp(-mean_logprob)
     ppl = np.exp(-S)
     N = len(model_ids)
     results: dict[tuple[str, str], PairResult] = {}
 
     for i in range(N):
         for j in range(i + 1, N):
-            ks = stats.ks_2samp(ppl[i], ppl[j])
+            sp = stats.spearmanr(ppl[i], ppl[j])
             dc_coef = dcor.distance_correlation(ppl[i], ppl[j])
             dc_test = dcor.independence.distance_correlation_t_test(ppl[i], ppl[j])
             results[(model_ids[i], model_ids[j])] = PairResult(
-                ks_statistic=float(ks.statistic),
-                ks_pvalue=float(ks.pvalue),
+                spearman_r=float(sp.statistic),
+                spearman_pvalue=float(sp.pvalue),
                 dcor_stat=float(dc_coef),
                 dcor_pvalue=float(dc_test.pvalue),
             )
@@ -58,46 +57,22 @@ def results_to_matrices(
 ) -> dict[str, np.ndarray]:
     """
     Unpack pairwise results into symmetric N×N numpy arrays.
-    Diagonal is set to semantically appropriate defaults (0 for KS, 1 for Spearman).
+    Diagonal is set to semantically appropriate defaults (1 for Spearman/dcor).
     """
     N = len(model_ids)
     idx = {m: i for i, m in enumerate(model_ids)}
 
-    ks_stat   = np.zeros((N, N))          # diagonal = 0: no difference with itself
-    ks_pval   = np.ones((N, N))           # diagonal = 1: can't reject same distribution
-    dc_stat   = np.eye(N)                 # diagonal = 1: perfect correlation with itself
-    dc_pval   = np.zeros((N, N))          # diagonal = 0: self-correlation is certain
+    sp_r    = np.eye(N)     # diagonal = 1: perfect correlation with itself
+    sp_pval = np.zeros((N, N))  # diagonal = 0: self-correlation is certain
+    dc_stat = np.eye(N)     # diagonal = 1: perfect correlation with itself
+    dc_pval = np.zeros((N, N))  # diagonal = 0: self-correlation is certain
 
     for (a, b), res in results.items():
         i, j = idx[a], idx[b]
-        ks_stat[i, j]  = ks_stat[j, i]  = res.ks_statistic
-        ks_pval[i, j]  = ks_pval[j, i]  = res.ks_pvalue
-        dc_stat[i, j]  = dc_stat[j, i]  = res.dcor_stat
-        dc_pval[i, j]  = dc_pval[j, i]  = res.dcor_pvalue
+        sp_r[i, j]    = sp_r[j, i]    = res.spearman_r
+        sp_pval[i, j] = sp_pval[j, i] = res.spearman_pvalue
+        dc_stat[i, j] = dc_stat[j, i] = res.dcor_stat
+        dc_pval[i, j] = dc_pval[j, i] = res.dcor_pvalue
 
-    return {"ks_statistic": ks_stat, "ks_pvalue": ks_pval,
+    return {"spearman_r": sp_r, "spearman_pvalue": sp_pval,
             "dcor_stat": dc_stat, "dcor_pvalue": dc_pval}
-
-
-def pca_opinion(S: np.ndarray, model_ids: list[str]) -> dict:
-    """
-    PCA on the (K_texts × N_models) perplexity matrix to test whether models
-    share a dominant 'hardness' opinion.
-
-    If PC1 explained variance is high (e.g. > 0.8 with N=2 models, or dominates
-    otherwise), a single latent opinion axis captures most of the variance.
-
-    Returns
-    -------
-    explained  : (N,) array of explained-variance ratios, one per PC
-    loadings   : (N, N_models) array — loadings[k] are model weights on PC k
-    """
-    ppl = np.exp(-S).T          # (K_texts, N_models)
-    ppl = ppl - ppl.mean(axis=0)  # center per model
-    _, s, Vt = np.linalg.svd(ppl, full_matrices=False)
-    explained = s ** 2 / (s ** 2).sum()
-    return {
-        "explained_variance_ratio": explained,
-        "loadings": Vt,          # row k = PC-k direction in model space
-        "model_ids": model_ids,
-    }

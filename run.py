@@ -4,7 +4,7 @@ LLM Judge Diversity — main entry point.
 
 Loads models from configs/models.yaml, samples X texts from each
 hendrycks/ethics subset and each yahoo_answers_topics topic, computes a
-perplexity matrix, and runs pairwise distribution tests (KS + Spearman)
+perplexity matrix, and runs pairwise Spearman + distance-correlation tests
 between every pair of models.
 
 Usage
@@ -35,7 +35,7 @@ from models.huggingface_model import HuggingFaceModel
 from loaders.ethics import SUBSETS as ETHICS_SUBSETS, sample_ethics
 from loaders.yahoo import sample_yahoo_by_topic
 from evaluation.matrix import compute_matrix
-from analysis.distribution_test import pairwise_tests, results_to_matrices, pca_opinion
+from analysis.distribution_test import pairwise_tests, results_to_matrices
 
 logging.basicConfig(
     level=logging.INFO,
@@ -94,7 +94,6 @@ def run_and_save(
     S = compute_matrix(models, texts)
     results = pairwise_tests(S, model_ids)
     mats = results_to_matrices(results, model_ids)
-    pca = pca_opinion(S, model_ids)
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -105,20 +104,8 @@ def run_and_save(
     for key, mat in mats.items():
         pd.DataFrame(mat, index=model_ids, columns=model_ids).to_csv(out_dir / f"{key}.csv")
 
-    # PCA — explained variance and loadings
-    evr = pca["explained_variance_ratio"]
-    pd.DataFrame({"pc": range(1, len(evr) + 1), "explained_variance_ratio": evr}).to_csv(
-        out_dir / "pca_explained.csv", index=False
-    )
-    pd.DataFrame(pca["loadings"], columns=short_ids,
-                 index=[f"PC{k+1}" for k in range(len(evr))]).to_csv(out_dir / "pca_loadings.csv")
-
-    # Print table to stdout
     _print_table(results, name, short_ids, model_ids)
-
-    # Plots
     _save_heatmap(mats, short_ids, name, out_dir / "heatmap.png")
-    _save_pca_plot(evr, short_ids, pca["loadings"], name, out_dir / "pca_opinion.png")
     logger.info(f"[{name}] saved to {out_dir}")
 
 
@@ -127,49 +114,26 @@ def _print_table(results, name: str, short_ids: list[str], model_ids: list[str])
     print(f"\n{'─'*60}")
     print(f"  {name}")
     print(f"{'─'*60}")
-    print(f"  {'Model A':30s}  {'Model B':30s}  {'KS stat':>8}  {'KS p':>8}  {'dCor':>8}  {'dCor p':>8}")
+    print(f"  {'Model A':30s}  {'Model B':30s}  {'Spearman r':>10}  {'Spearman p':>10}  {'dCor':>8}  {'dCor p':>8}")
     for (a, b), res in results.items():
-        sig = "***" if res.ks_pvalue < 0.01 else ("*" if res.ks_pvalue < 0.05 else "   ")
-        print(f"  {short[a]:30s}  {short[b]:30s}  {res.ks_statistic:8.4f}  {res.ks_pvalue:8.4f}{sig}  {res.dcor_stat:8.4f}  {res.dcor_pvalue:8.4f}")
+        sig = "***" if res.spearman_pvalue < 0.01 else ("*" if res.spearman_pvalue < 0.05 else "   ")
+        print(f"  {short[a]:30s}  {short[b]:30s}  {res.spearman_r:10.4f}  {res.spearman_pvalue:10.4f}{sig}  {res.dcor_stat:8.4f}  {res.dcor_pvalue:8.4f}")
 
 
 def _save_heatmap(mats: dict, short_ids: list[str], title: str, path: Path) -> None:
-    fig, axes = plt.subplots(1, 2, figsize=(max(10, len(short_ids) * 2), max(4, len(short_ids) * 1.5)))
+    n = len(short_ids)
+    fig, axes = plt.subplots(1, 2, figsize=(max(16, n * 3), max(4, n * 1.5)))
 
-    ks_df = pd.DataFrame(mats["ks_statistic"], index=short_ids, columns=short_ids)
-    dc_df = pd.DataFrame(mats["dcor_stat"],    index=short_ids, columns=short_ids)
+    sp_df = pd.DataFrame(mats["spearman_r"], index=short_ids, columns=short_ids)
+    dc_df = pd.DataFrame(mats["dcor_stat"],  index=short_ids, columns=short_ids)
 
-    sns.heatmap(ks_df, ax=axes[0], annot=True, fmt=".3f", cmap="Reds",  vmin=0, vmax=1, square=True, linewidths=0.5)
-    axes[0].set_title("KS statistic  (0=same dist, 1=different)")
+    sns.heatmap(sp_df, ax=axes[0], annot=True, fmt=".3f", cmap="RdYlGn", vmin=-1, vmax=1, square=True, linewidths=0.5)
+    axes[0].set_title("Spearman r  (1=same ranking, −1=opposite)")
 
     sns.heatmap(dc_df, ax=axes[1], annot=True, fmt=".3f", cmap="Blues", vmin=0, vmax=1, square=True, linewidths=0.5)
     axes[1].set_title("Distance Correlation  (0=independent, 1=dependent)")
 
     fig.suptitle(title, fontsize=12, y=1.02)
-    plt.tight_layout()
-    fig.savefig(path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-
-
-def _save_pca_plot(evr: np.ndarray, short_ids: list[str], loadings: np.ndarray,
-                   title: str, path: Path) -> None:
-    n_pcs = len(evr)
-    fig, axes = plt.subplots(1, 2, figsize=(10, max(3, n_pcs * 0.8 + 2)))
-
-    # Left: explained variance bar chart
-    axes[0].bar(range(1, n_pcs + 1), evr * 100, color="steelblue")
-    axes[0].set_xlabel("Principal Component")
-    axes[0].set_ylabel("Explained variance (%)")
-    axes[0].set_title("PCA explained variance")
-    axes[0].set_xticks(range(1, n_pcs + 1))
-
-    # Right: PC1 loadings (model weights on the dominant opinion axis)
-    axes[1].barh(short_ids, loadings[0], color="darkorange")
-    axes[1].axvline(0, color="black", linewidth=0.8)
-    axes[1].set_xlabel("Loading on PC1")
-    axes[1].set_title(f"PC1 loadings  ({evr[0]*100:.1f}% var)")
-
-    fig.suptitle(title, fontsize=12)
     plt.tight_layout()
     fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
