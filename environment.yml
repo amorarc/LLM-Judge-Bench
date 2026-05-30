@@ -1,0 +1,20 @@
+name: llm-judge-diversity
+channels:
+  - defaults
+dependencies:
+  - python=3.13
+  - pip
+  - pip:
+    - torch==2.9.1
+    - transformers==4.57.6
+    - accelerate==1.12.0
+    - bitsandbytes>=0.41
+    - datasets>=2.16
+    - numpy==2.2.6
+    - pandas==3.0.1
+    - scipy==1.17.0
+    - dcor>=0.6
+    - tqdm==4.67.1
+    - matplotlib==3.10.8
+    - seaborn>=0.13
+    - pyyaml==6.0.3
