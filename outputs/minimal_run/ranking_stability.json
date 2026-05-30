@@ -1,0 +1,8 @@
+{
+  "mean_kendall_tau": 0.16750957854406134,
+  "std_kendall_tau": 0.23376023709379512,
+  "mean_disagreement": 0.7262711420410823,
+  "max_disagreement_text_idx": 4,
+  "min_disagreement_text_idx": 25,
+  "mean_top10_jaccard": 0.28059086882616296
+}

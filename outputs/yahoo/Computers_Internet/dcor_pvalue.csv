@@ -1,0 +1,4 @@
+,google/gemma-4-E2B-it,Qwen/Qwen3.5-4B,meta-llama/Llama-3.2-3B
+google/gemma-4-E2B-it,1.0,6.08620931430437e-11,6.994405055138486e-15
+Qwen/Qwen3.5-4B,6.08620931430437e-11,1.0,0.0
+meta-llama/Llama-3.2-3B,6.994405055138486e-15,0.0,1.0

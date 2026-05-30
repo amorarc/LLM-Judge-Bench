@@ -1,0 +1,47 @@
+# HuggingFace causal-LM judges.
+# Each entry can be a bare model ID or a dict with optional parameters.
+#
+# Parameters (all optional):
+#   dtype:      float32 | float16 | bfloat16 | float8 | float8_e4m3fn | float8_e5m2  (default: float32)
+#               fp8 requires PyTorch >= 2.1 and an H100/Ada GPU
+#   device:     auto | cpu | cuda | cuda:0     (default: auto → CUDA if available)
+#   batch_size: int                            (default: 8)
+#   max_length: int                            (default: 512)
+#   num_threads: int  — CPU threads when no GPU (default: 4)
+#   quantization: int8 | int4  — bitsandbytes quantization; overrides dtype when set
+#                 NOTE: bitsandbytes has no fp8 support; use dtype: float8 for native fp8
+#
+# Examples:
+#   - google/gemma-4-E2B-it
+#   - id: Qwen/Qwen3.5-4B
+#     dtype: bfloat16
+#     batch_size: 4
+#   - id: meta-llama/Llama-3-8B
+#     quantization: int4   # ~4 GB VRAM instead of ~16 GB
+
+models:
+  - id: google/gemma-4-E2B-it
+    dtype: float16
+    batch_size: 1
+    quantization: int4
+  - id: Qwen/Qwen3.5-4B
+    dtype: float16
+    batch_size: 1
+    quantization: int4
+  - id: meta-llama/Llama-3.2-3B
+    dtype: float16
+    batch_size: 1
+    quantization: int4
+  - id: nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16
+    dtype: float16
+    batch_size: 1
+    quantization: int4
+  - id: ibm-granite/granite-4.1-3b
+    dtype: float16
+    batch_size: 1
+    quantization: int4
+  - id: microsoft/Phi-4-mini-instruct
+    dtype: float16
+    batch_size: 1
+    quantization: int4
+
