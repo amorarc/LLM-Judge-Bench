@@ -11,16 +11,25 @@
 
 ## Table of Contents
 
-- [Overview](#overview)
-- [Core Idea](#core-idea)
-- [Quick Start](#quick-start)
-- [Repository Structure](#repository-structure)
-- [Usage](#usage)
-- [Datasets](#datasets)
-- [Analysis Metrics](#analysis-metrics)
-- [Outputs](#outputs)
-- [Results Gallery](#results-gallery)
-- [Extending](#extending)
+- [LLM Judge Bench](#llm-judge-bench)
+  - [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
+  - [Core Idea](#core-idea)
+  - [Quick Start](#quick-start)
+  - [Repository Structure](#repository-structure)
+  - [Usage](#usage)
+    - [Full evaluation — `run.py`](#full-evaluation--runpy)
+    - [Per-phrase viewer — `show.py`](#per-phrase-viewer--showpy)
+    - [Configuring models — `configs/models.yaml`](#configuring-models--configsmodelsyaml)
+  - [Datasets](#datasets)
+  - [Analysis Metrics](#analysis-metrics)
+    - [Spearman Rank Correlation](#spearman-rank-correlation)
+    - [Distance Correlation](#distance-correlation)
+  - [Outputs](#outputs)
+  - [Results Gallery](#results-gallery)
+    - [Ethics](#ethics)
+    - [Yahoo Answers Topics](#yahoo-answers-topics)
+  - [Extending](#extending)
 
 ---
 
@@ -39,7 +48,7 @@ Given a set of models and a corpus of texts, it asks:
 
 Define $N$ models $M_1, \ldots, M_N$ and $K$ texts $x_1, \ldots, x_K$. Compute the **score matrix** $S \in \mathbb{R}^{N \times K}$:
 
-$$S[i,\, j] = \frac{1}{T_j} \sum_{t=1}^{T_j} \log p_{M_i}\!\left(x_{j,t} \mid x_{j,\lt t}\right)$$
+$$S[i,\, j] = \frac{1}{T_j} \sum_{t=1}^{T_j} \log\!(p_{M_i}\!(x_{j,t} \mid x_{j,\lt t}))$$
 
 where $T_j$ is the token length of text $x_j$. The corresponding **perplexity** is:
 
