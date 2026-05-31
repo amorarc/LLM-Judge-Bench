@@ -52,7 +52,7 @@ $$S[i,\, j] = \frac{1}{T_j} \sum_{t=1}^{T_j} \log(p_{M_i}(x_{j,t} \mid x_{j,\lt 
 
 where $T_j$ is the token length of text $x_j$. The corresponding **perplexity** is:
 
-$$\mathrm{PPL}_{M_i}(x_j) = \exp\!\left(-S[i,\, j]\right)$$
+$$\mathrm{PPL}_{M_i}(x_j) = \exp\left(-S[i,\, j]\right)$$
 
 Then test: do different models assign statistically similar perplexity distributions?
 
