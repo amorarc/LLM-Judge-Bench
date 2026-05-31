@@ -48,7 +48,7 @@ Given a set of models and a corpus of texts, it asks:
 
 Define $N$ models $M_1, \ldots, M_N$ and $K$ texts $x_1, \ldots, x_K$. Compute the **score matrix** $S \in \mathbb{R}^{N \times K}$:
 
-$$S[i,\, j] = \frac{1}{T_j} \sum_{t=1}^{T_j} \log\!(p_{M_i}\!(x_{j,t} \mid x_{j,\lt t}))$$
+$$S[i,\, j] = \frac{1}{T_j} \sum_{t=1}^{T_j} \log(p_{M_i}(x_{j,t} \mid x_{j,\lt t}))$$
 
 where $T_j$ is the token length of text $x_j$. The corresponding **perplexity** is:
 
