@@ -20,6 +20,7 @@
   - [Usage](#usage)
     - [Full evaluation — `run.py`](#full-evaluation--runpy)
     - [Per-phrase viewer — `show.py`](#per-phrase-viewer--showpy)
+    - [Model clustering — `cluster_models.py`](#model-clustering--cluster_modelspy)
     - [Configuring models — `configs/models.yaml`](#configuring-models--configsmodelsyaml)
   - [Datasets](#datasets)
   - [Analysis Metrics](#analysis-metrics)
@@ -77,8 +78,9 @@ python run.py --n-samples 100
 ├── evaluation/       Cross-model perplexity matrix computation
 ├── analysis/         Pairwise KS tests, distance correlation, PCA
 ├── outputs/          Generated artefacts (CSV scores + heatmaps)
-├── run.py            Full evaluation pipeline
-└── show.py           Per-phrase perplexity viewer
+├── run.py                Full evaluation pipeline
+├── show.py               Per-phrase perplexity viewer
+└── cluster_models.py     Model clustering & similarity network visualisation
 ```
 
 ---
@@ -126,6 +128,33 @@ python show.py --samples 10 --dataset yahoo --topic Sports
 ```
 
 </details>
+
+### Model clustering — `cluster_models.py`
+
+Reads all `spearman_r.csv` and `dcor_stat.csv` outputs, combines them with a weighted average (0.2 × Spearman + 0.8 × dCor), and produces a two-panel figure:
+
+- **Left** — similarity network: models as nodes on a pentagon, edge thickness/colour encodes pairwise correlation, node colour is unique per model.
+- **Right** — pairwise correlation heatmap, rows/columns reordered by hierarchical clustering.
+
+```bash
+# default: both metrics, all datasets
+python cluster_models.py --save cluster_models.png
+
+# restrict to one dataset or metric
+python cluster_models.py --dataset yahoo
+python cluster_models.py --metric dcor_stat --dataset ethics
+
+# change linkage method
+python cluster_models.py --method ward --save cluster_models.png
+```
+
+| Argument | Default | Description |
+|---|---|---|
+| `--outputs` | `outputs/` | Path to the outputs directory |
+| `--dataset` | `all` | `yahoo` · `ethics` · `all` |
+| `--metric` | `both` | `spearman_r` · `dcor_stat` · `both` (0.2/0.8 weighted avg) |
+| `--method` | `average` | Linkage method: `average` · `ward` · `complete` · `single` |
+| `--save` | *(none)* | Save figure to this path |
 
 ### Configuring models — `configs/models.yaml`
 
@@ -194,6 +223,10 @@ Results are written to `outputs/<dataset>/<subset>/`:
 ---
 
 ## Results Gallery
+
+### Model Clustering (all datasets)
+
+![clustering](cluster_models.png)
 
 ### Ethics
 
