@@ -40,11 +40,4 @@ models:
     dtype: float16
     batch_size: 1
     quantization: int4
-#  - id: mistralai/Ministral-3-3B-Instruct-2512
-#   dtype: bfloat16
-#    batch_size: 1
-#    quantization: int8
-#  - id: nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16
-#    dtype: float16
-#    batch_size: 1
-#    quantization: int4
+

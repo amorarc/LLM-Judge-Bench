@@ -112,52 +112,71 @@ def _cluster_colors(Z: np.ndarray, n: int, method: str) -> list[str]:
 
 def plot_network(ax: plt.Axes, corr_df: pd.DataFrame,
                  metric_label: str) -> None:
-    """Draw a weighted network graph: edge width/color = correlation strength."""
+    """Draw a weighted network graph: edge width/color = correlation strength.
+    All visual parameters scale automatically with the number of models."""
     models = corr_df.index.tolist()
     n = len(models)
 
+    # ── Scale factors (anchored to n=5) ──────────────────────────────────────
+    s = 5 / max(n, 5)                           # 1.0 at n=5, shrinks for larger n
+    node_size       = max(300,  int(2400 * s))
+    node_lw         = max(1.2,  3.0  * s)
+    label_fontsize  = max(6.0,  13.5 * s)
+    label_pad       = max(0.15, 0.4  * s)
+    edge_lw_base    = max(0.5,  1.5  * s)
+    edge_lw_range   = max(2.0,  10.0 * s)
+    elabel_fontsize = max(4.5,  7.5  * s)
+    show_edge_labels = n <= 10              # suppress at high density
+
+    # label radius: gap between node and label grows a little for large n
+    # so overlapping text from nearby nodes doesn't merge into the node
+    label_r = 1.28 + 0.008 * max(0, n - 5)
+
+    # ── Graph ─────────────────────────────────────────────────────────────────
     G = nx.Graph()
     G.add_nodes_from(models)
     for i in range(n):
         for j in range(i + 1, n):
-            w = corr_df.iloc[i, j]
-            G.add_edge(models[i], models[j], weight=w)
+            G.add_edge(models[i], models[j], weight=corr_df.iloc[i, j])
 
-    # Pentagon layout — nodes at equal angles, starting from top
+    # n-gon layout — nodes equally spaced on the unit circle, top starts at 12 o'clock
     angles = [np.pi / 2 + 2 * np.pi * i / n for i in range(n)]
     pos = {node: (np.cos(a), np.sin(a)) for node, a in zip(models, angles)}
 
-    # Distinct saturated colors per model — auto-scales with any number of models
-    _saturated = [
+    # Distinct saturated colors — palette repeats for > 10 models
+    _palette = [
         "#E74C3C", "#3498DB", "#F1C40F", "#2ECC71", "#9B59B6",
         "#E67E22", "#1ABC9C", "#E91E8C", "#00BCD4", "#FF5722",
     ]
-    node_colors = [_saturated[i % len(_saturated)] for i in range(n)]
+    node_colors = [_palette[i % len(_palette)] for i in range(n)]
 
-    edges = list(G.edges(data=True))
+    # ── Edges ─────────────────────────────────────────────────────────────────
+    edges   = list(G.edges(data=True))
     weights = np.array([d["weight"] for _, _, d in edges])
-    norm = mcolors.Normalize(vmin=0.0, vmax=1.0)
-    cmap = matplotlib.colormaps["RdYlGn"]
+    norm    = mcolors.Normalize(vmin=0.0, vmax=1.0)
+    cmap    = matplotlib.colormaps["RdYlGn"]
 
-    edge_widths = 1.5 + 10 * (weights - weights.min()) / max(weights.max() - weights.min(), 1e-9)
+    w_range    = max(weights.max() - weights.min(), 1e-9)
+    edge_widths = edge_lw_base + edge_lw_range * (weights - weights.min()) / w_range
     edge_colors = [cmap(norm(w)) for w in weights]
 
     nx.draw_networkx_edges(G, pos, ax=ax, width=edge_widths,
-                           edge_color=edge_colors, alpha=0.75, style="solid")
+                           edge_color=edge_colors, alpha=0.75)
+
+    if show_edge_labels:
+        edge_labels = {(u, v): f"{d['weight']:.2f}" for u, v, d in edges}
+        nx.draw_networkx_edge_labels(
+            G, pos, edge_labels=edge_labels, ax=ax,
+            font_size=elabel_fontsize, font_color="#333333", label_pos=0.42,
+            bbox={"boxstyle": "round,pad=0.25", "fc": "white",
+                  "ec": "none", "alpha": 0.82},
+        )
 
     nx.draw_networkx_nodes(G, pos, ax=ax, node_color=node_colors,
-                           node_size=2400, edgecolors="#ffffff", linewidths=3, alpha=0.95)
+                           node_size=node_size, edgecolors="#ffffff",
+                           linewidths=node_lw, alpha=0.95)
 
-    # Edge weight labels
-    edge_labels = {(u, v): f"{d['weight']:.2f}" for u, v, d in edges}
-    nx.draw_networkx_edge_labels(
-        G, pos, edge_labels=edge_labels, ax=ax,
-        font_size=7.5, font_color="#333333", label_pos=0.42,
-        bbox={"boxstyle": "round,pad=0.25", "fc": "white", "ec": "none", "alpha": 0.82},
-    )
-
-    # Labels pushed radially outward from origin (pentagon is centered at 0,0)
-    label_r = 1.28   # outside the unit-circle nodes
+    # ── Labels pushed radially outward ────────────────────────────────────────
     model_color = dict(zip(models, node_colors))
     for node, (x, y) in pos.items():
         mag = max(np.hypot(x, y), 1e-9)
@@ -166,15 +185,15 @@ def plot_network(ax: plt.Axes, corr_df: pd.DataFrame,
         ax.text(
             lx, ly, node,
             ha=ha, va="center",
-            fontsize=13.5, fontweight="bold", color=model_color[node],
-            bbox={"boxstyle": "round,pad=0.4", "fc": "white",
+            fontsize=label_fontsize, fontweight="bold", color=model_color[node],
+            bbox={"boxstyle": f"round,pad={label_pad}", "fc": "white",
                   "ec": model_color[node], "alpha": 0.95, "linewidth": 1.2},
             zorder=5,
         )
 
-    ax.set_xlim(-1.92, 1.92)
-    ax.set_ylim(-1.67, 1.67)
-
+    # Axes bounds: fixed margin beyond label_r so text is never clipped
+    ax.set_xlim(-label_r - 0.65, label_r + 0.65)
+    ax.set_ylim(-label_r - 0.40, label_r + 0.40)
     ax.axis("off")
 
 
@@ -217,7 +236,8 @@ def plot_all(corr_df: pd.DataFrame, metric_label: str, dataset: str,
         "axes.spines.right": False,
     })
 
-    fig = plt.figure(figsize=(20.4, 9.6))
+    fig_h = max(9.6, 6 + n * 0.5)   # grows with number of models
+    fig = plt.figure(figsize=(20.4, fig_h))
     fig.patch.set_facecolor("#ffffff")
 
     fig.text(0.5, 0.97,
