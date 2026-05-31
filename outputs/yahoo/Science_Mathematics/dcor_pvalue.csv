@@ -1,5 +1,6 @@
-,google/gemma-4-E2B-it,Qwen/Qwen3.5-4B,meta-llama/Llama-3.2-3B,microsoft/Phi-4-mini-instruct
-google/gemma-4-E2B-it,0.0,0.6072794079372175,0.654822492603046,0.3710040528740086
-Qwen/Qwen3.5-4B,0.6072794079372175,0.0,5.73824737171158e-07,0.01288722069260051
-meta-llama/Llama-3.2-3B,0.654822492603046,5.73824737171158e-07,0.0,0.005869238737894356
-microsoft/Phi-4-mini-instruct,0.3710040528740086,0.01288722069260051,0.005869238737894356,0.0
+,google/gemma-4-E2B-it,Qwen/Qwen3.5-4B,meta-llama/Llama-3.2-3B-Instruct,ibm-granite/granite-4.1-3b,microsoft/Phi-4-mini-instruct
+google/gemma-4-E2B-it,0.0,0.0,0.0,0.0,0.0
+Qwen/Qwen3.5-4B,0.0,0.0,0.0,0.0,0.0
+meta-llama/Llama-3.2-3B-Instruct,0.0,0.0,0.0,0.0,0.0
+ibm-granite/granite-4.1-3b,0.0,0.0,0.0,0.0,0.0
+microsoft/Phi-4-mini-instruct,0.0,0.0,0.0,0.0,0.0

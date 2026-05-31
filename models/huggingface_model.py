@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import logging
 from typing import List, Optional
 
@@ -112,6 +113,7 @@ class HuggingFaceModel(BaseModel):
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
+        self._vocab_size = len(self.tokenizer)
 
         quant_config = self._build_quant_config()
         load_kwargs: dict = {"device_map": device_map}
@@ -129,7 +131,7 @@ class HuggingFaceModel(BaseModel):
         self.model = model_cls.from_pretrained(self.model_id, **load_kwargs)
         self.model.eval()
         self._loaded = True
-        logger.info(f"Loaded {self.model_id}")
+        logger.info(f"Loaded {self.model_id} (vocab={self._vocab_size})")
 
     def unload(self) -> None:
         if not self._loaded:
@@ -137,11 +139,16 @@ class HuggingFaceModel(BaseModel):
         del self.model
         del self.tokenizer
         self._loaded = False
+        gc.collect()
         try:
             self._torch.cuda.empty_cache()
         except Exception:
             pass
         logger.info(f"Unloaded {self.model_id}")
+
+    @property
+    def vocab_size(self) -> int | None:
+        return getattr(self, "_vocab_size", None)
 
     def logprobs(self, text: str) -> float:
         return self.batch_logprobs([text])[0]
@@ -158,6 +165,9 @@ class HuggingFaceModel(BaseModel):
         return results
 
     def _score_chunk(self, texts: list[str]) -> list[float]:
+        if getattr(self.tokenizer, "chat_template", None) is not None:
+            return [self._score_with_template(t) for t in texts]
+
         torch = self._torch
         enc = self.tokenizer(
             texts,
@@ -178,3 +188,59 @@ class HuggingFaceModel(BaseModel):
         mask = attention_mask[:, 1:].float()
         mean_lp = (token_lp * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
         return mean_lp.cpu().tolist()
+
+    def _score_with_template(self, text: str) -> float:
+        """Score text as an assistant turn, measuring perplexity only over content tokens."""
+        torch = self._torch
+
+        first_three = " ".join(text.split()[:3])
+        user_prompt = f"Continue this sentence: {first_three}"
+
+        # Compute prefix length robustly: tokenize only the user turn with
+        # add_generation_prompt=True so we get exactly the tokens up to where
+        # the assistant content begins, with no fragile string searching.
+        prefix_formatted = self.tokenizer.apply_chat_template(
+            [{"role": "user", "content": user_prompt}],
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+        n_prefix = len(self.tokenizer.encode(prefix_formatted, add_special_tokens=False))
+
+        formatted = self.tokenizer.apply_chat_template(
+            [
+                {"role": "user", "content": user_prompt},
+                {"role": "assistant", "content": text},
+            ],
+            tokenize=False,
+            add_generation_prompt=False,
+        )
+
+        enc = self.tokenizer(
+            formatted,
+            return_tensors="pt",
+            truncation=True,
+            max_length=self.max_length,
+            add_special_tokens=False,  # template already includes special tokens
+        )
+        input_ids = enc["input_ids"].to(self.model.device)
+        attention_mask = enc["attention_mask"].to(self.model.device)
+
+        with torch.no_grad():
+            logits = self.model(input_ids=input_ids, attention_mask=attention_mask).logits
+
+        log_probs = torch.nn.functional.log_softmax(logits, dim=-1)
+        # token_lp[i] = log P(token_{i+1} | tokens_{0..i})
+        token_lp = log_probs[:, :-1].gather(2, input_ids[:, 1:].unsqueeze(-1)).squeeze(-1)
+
+        # Score only the assistant content tokens; first content token is at position n_prefix,
+        # so its log-prob sits at index n_prefix-1 in the shifted token_lp array
+        seq_len = token_lp.shape[1]
+        start_idx = max(0, n_prefix - 1)
+        mask = torch.zeros(seq_len, device=self.model.device)
+        if start_idx < seq_len:
+            mask[start_idx:] = 1.0
+        else:
+            mask = torch.ones(seq_len, device=self.model.device)
+
+        mean_lp = (token_lp.squeeze(0) * mask).sum() / mask.sum().clamp(min=1)
+        return mean_lp.item()

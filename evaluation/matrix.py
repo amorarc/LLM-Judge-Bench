@@ -1,3 +1,5 @@
+import gc
+
 import numpy as np
 from models.base import BaseModel
 
@@ -14,4 +16,5 @@ def compute_matrix(models: list[BaseModel], texts: list[str]) -> np.ndarray:
         rows.append(np.array(m.batch_logprobs(texts), dtype=float))
         if hasattr(m, "unload"):
             m.unload()
+        gc.collect()
     return np.stack(rows)
